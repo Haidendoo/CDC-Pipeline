@@ -43,6 +43,34 @@ services:
       - ./clickhouse_logs:/var/log/clickhouse-server
       - ./clickhouse_users.xml:/etc/clickhouse-server/users.d/default-password.xml
       - ./mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8123/ping | grep -q Ok."]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  dbt:
+    build:
+      context: .
+      dockerfile: dbt.Dockerfile
+    container_name: my_dbt_container
+    working_dir: /usr/app/dbt
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    volumes:
+      - ./dbt:/usr/app/dbt
+      - ./dbt/profiles.yml:/usr/app/.dbt/profiles.yml:ro
+    ports:
+      - "8081:8080"
+    command: >
+      sh -c "dbt deps
+      && dbt debug
+      && dbt build
+      && dbt docs generate
+      && dbt docs serve --host 0.0.0.0 --port 8080"
+    restart: unless-stopped
 
 volumes:
   postgres_data:

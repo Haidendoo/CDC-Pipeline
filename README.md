@@ -19,7 +19,7 @@ A real-time Change Data Capture (CDC) pipeline that captures database changes us
 
 ## 🔍 Overview
 
-This CDC pipeline uses Debezium to capture real-time database changes, streaming them as JSON events through RabbitMQ. These raw logs are then ingested into a warehouse where dbt transforms the "before/after" snapshots into clean, structured tables. This ensures low-latency data sync and a decoupled analytical architecture.
+This CDC pipeline uses Debezium to capture real-time database changes, streaming them as JSON events through RabbitMQ. These raw logs are then ingested into a warehouse where dbt transforms the "before/after" snapshots into clean, structured tables. dbt automatically runs on startup to transform and test your models. This ensures low-latency data sync and a decoupled analytical architecture.
 
 ### Key Components
 
@@ -27,22 +27,21 @@ This CDC pipeline uses Debezium to capture real-time database changes, streaming
 - **Debezium Server**: CDC engine that monitors database changes
 - **RabbitMQ**: Message broker for event streaming
 - **ClickHouse**: Analytics warehouse for storing and querying CDC events
+- **dbt**: Transform engine that builds and tests data models on ClickHouse with interactive docs UI
 
 ## 🏗️ Architecture
 
-```
-┌─────────────┐      ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│ PostgreSQL  │─────▶│   Debezium   │─────▶│   RabbitMQ   │─────▶│  ClickHouse  │
-│  (Source)   │ CDC  │    Server    │ JSON │   (Broker)   │      │ (Warehouse)  │
-└─────────────┘      └──────────────┘      └──────────────┘      └──────────────┘
-   WAL Logs            Change Events        Message Queue         Analytics
-```
+![CDC Pipeline Architecture](img/architect.png)
+
+For detailed architecture documentation including component descriptions, data flow steps, and design patterns, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## ✨ Features
 
 - **Real-time CDC**: Captures INSERT, UPDATE, and DELETE operations
 - **Logical Replication**: Uses PostgreSQL's Write-Ahead Log (WAL)
 - **Decoupled Architecture**: Message broker enables multiple consumers
+- **Automatic Transformations**: dbt runs on startup to build and test models
+- **Data Documentation**: Interactive dbt docs UI with lineage and column-level metadata
 - **Scalable**: Easy to add more sources or sinks
 - **Event Streaming**: JSON-formatted change events
 - **Low Latency**: Near real-time data synchronization
@@ -75,11 +74,12 @@ This CDC pipeline uses Debezium to capture real-time database changes, streaming
    docker-compose ps
    ```
 
-   You should see 4 containers running:
+   You should see 5 containers running:
    - `my_postgres_container`
    - `my_rabbitmq_container`
    - `my_debezium_server`
    - `my_clickhouse_container`
+   - `my_dbt_container` (runs dbt transformations and serves docs UI)
 
 ## ⚙️ Configuration
 
@@ -118,16 +118,40 @@ Custom user configuration in `clickhouse_users.xml`:
 <!-- Add custom user settings here -->
 ```
 
+### dbt Configuration
+
+The dbt project is configured in the `dbt/` directory:
+
+- **dbt_project.yml**: Project configuration (name, version, model paths, etc.)
+- **profiles.yml**: ClickHouse connection settings
+  - Host: `clickhouse` (Docker network)
+  - Port: `8123`
+  - Schema: `default`
+  - User: `api` / Password: `api`
+
+dbt **automatically runs on startup** with the following command sequence:
+```bash
+dbt deps
+dbt debug
+dbt build           # runs models and tests
+dbt docs generate
+dbt docs serve
+```
+
 ## 📚 Usage
 
 ### Access Service UIs
+
+- **dbt Docs & Lineage**: http://localhost:8081
+  - Auto-generated documentation of models and tests
+  - View model lineage and column descriptions
+  - No authentication required
 
 - **RabbitMQ Management**: http://localhost:15672
   - Username: `guest`
   - Password: `guest`
 
 - **ClickHouse Web UI**: http://localhost:8080
-
 
 - **ClickHouse HTTP Interface**: http://localhost:8123
   - Username: `api`
@@ -146,6 +170,25 @@ Check the RabbitMQ management UI to see CDC events being published.
 
 ```bash
 docker exec -it my_clickhouse_container clickhouse-client
+```
+
+### Run dbt Commands Manually
+
+You can run dbt commands manually (outside of the automatic startup):
+
+```bash
+# Run models
+docker exec my_dbt_container dbt run
+
+# Run tests
+docker exec my_dbt_container dbt test
+
+# Build (run models + tests)
+docker exec my_dbt_container dbt build
+
+# Generate and serve docs
+docker exec my_dbt_container dbt docs generate
+docker exec my_dbt_container dbt docs serve --host 0.0.0.0 --port 8080
 ```
 
 ### Create Test Data
@@ -184,7 +227,8 @@ These changes will be automatically captured by Debezium and sent to RabbitMQ.
 5. **Message Publishing**: Events are published to RabbitMQ
 6. **Event Consumption**: Consumers read from RabbitMQ queues
 7. **Data Loading**: Events are loaded into ClickHouse
-8. **Transformation**: dbt transforms raw events into structured tables
+8. **Transformation**: dbt automatically transforms raw events into structured tables
+9. **Documentation**: dbt serves interactive docs UI with model lineage and descriptions
 
 ### Event Format
 
@@ -264,6 +308,18 @@ docker stats
    docker logs my_clickhouse_container
    ```
 
+### dbt Container Keeps Restarting
+
+1. Check dbt logs to identify the error:
+   ```bash
+   docker logs my_dbt_container
+   ```
+
+2. Common issues:
+   - **git not found**: Rebuild the dbt image with `docker compose up -d --build dbt`
+   - **Connection timeout**: Ensure ClickHouse is healthy: `docker ps | grep clickhouse`
+   - **Profile errors**: Verify `dbt/profiles.yml` has correct ClickHouse credentials
+
 ### Containers Won't Start
 
 ```bash
@@ -273,6 +329,20 @@ docker-compose down -v
 # Restart services
 docker-compose up -d
 ```
+
+### dbt Models or Tests Failing
+
+1. Check the dbt logs:
+   ```bash
+   docker logs my_dbt_container
+   ```
+
+2. Run dbt debug to verify connection:
+   ```bash
+   docker exec my_dbt_container dbt debug
+   ```
+
+3. Verify your SQL models are syntactically correct for ClickHouse (not all PostgreSQL syntax is supported)
 
 ## 🛠️ Development
 

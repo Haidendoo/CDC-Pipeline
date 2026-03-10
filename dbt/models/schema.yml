@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: healthcheck
+    description: Minimal model to verify dbt can run and test on ClickHouse.
+    columns:
+      - name: id
+        tests:
+          - not_null
+          - unique
