@@ -1,13 +1,15 @@
 services:
   postgres_db:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: my_postgres_container
     environment:
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
       POSTGRES_DB: mydatabase
+      TZ: UTC
+      PGTZ: UTC
     # IMPORTANT: We must tell Postgres to allow logical replication
-    command: ["postgres", "-c", "wal_level=logical"]
+    command: ["postgres", "-c", "wal_level=logical", "-c", "timezone=UTC"]
     ports:
       - "5432:5432"
     volumes:

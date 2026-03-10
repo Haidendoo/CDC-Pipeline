@@ -2,6 +2,7 @@
 
 A real-time Change Data Capture (CDC) pipeline that captures database changes using Debezium, streams events through RabbitMQ, and stores them in ClickHouse for analytics.
 
+The data you can get from here [Kaggle](https://www.kaggle.com/datasets/shree0910/ai-and-data-science-job-market-dataset-20202026)
 ## 📋 Table of Contents
 
 - [Overview](#overview)
