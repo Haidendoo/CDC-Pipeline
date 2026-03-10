@@ -1,0 +1,49 @@
+services:
+  postgres_db:
+    image: postgres:16
+    container_name: my_postgres_container
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    # IMPORTANT: We must tell Postgres to allow logical replication
+    command: ["postgres", "-c", "wal_level=logical"]
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: my_rabbitmq_container
+    ports:
+      - "5672:5672"
+      - "15672:15672" # Management UI
+
+  debezium:
+    image: quay.io/debezium/server:3.0.0.Final
+    container_name: my_debezium_server
+    volumes:
+      - ./debezium_conf:/debezium/conf  # You need to map a config file here
+    depends_on:
+      - postgres_db
+      - rabbitmq
+
+  clickhouse:
+    image: clickhouse/clickstack-all-in-one:latest
+    container_name: my_clickhouse_container
+    command: clickstack
+    ports:
+      - "8123:8123"   # HTTP interface
+      - "8080:8080"   # Web UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    volumes:
+      - ./clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse_logs:/var/log/clickhouse-server
+      - ./clickhouse_users.xml:/etc/clickhouse-server/users.d/default-password.xml
+      - ./mongodb_data:/data/db
+
+volumes:
+  postgres_data:
+  clickhouse_data:

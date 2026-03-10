@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<clickhouse>
+  <default>
+    <password>mypassword</password>
+  </default>
+</clickhouse>
