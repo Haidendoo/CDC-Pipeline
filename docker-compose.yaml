@@ -25,8 +25,16 @@ services:
   debezium:
     image: quay.io/debezium/server:3.0.0.Final
     container_name: my_debezium_server
+    healthcheck:
+      test: curl http://debezium:8080/q/health || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "8080:8080"
     volumes:
-      - ./debezium_conf:/debezium/conf  # You need to map a config file here
+      - ./debezium_conf:/debezium/conf  # Debezium server reads config from /debezium/config
+      - ./debezium_data:/debezium/data
     depends_on:
       - postgres_db
       - rabbitmq
@@ -37,7 +45,7 @@ services:
     command: clickstack
     ports:
       - "8123:8123"   # HTTP interface
-      - "8080:8080"   # Web UI
+      - "8083:8080"   # Web UI
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
     volumes:

@@ -209,3 +209,4 @@ data/
 clickhouse_data/
 clickhouse_logs/
 mongodb_data/
+debezium_data/

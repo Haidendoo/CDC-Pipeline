@@ -271,6 +271,15 @@ docker stats
 
 ## 🔧 Troubleshooting
 
+### Debezium UI Shows "Could not connect to Kafka Connect"
+
+This project uses **Debezium Server** (`quay.io/debezium/server`) with RabbitMQ sink, not Kafka Connect.
+
+- Debezium UI (`debezium/debezium-ui`) requires a **Kafka Connect REST API** endpoint (for example `/connectors` on port `8083`).
+- Debezium Server does not expose Kafka Connect APIs, so Debezium UI cannot manage or display this pipeline.
+
+If you need Debezium UI, you must run a Kafka Connect-based deployment (Kafka + Connect + Debezium connector) and point the UI to that Connect URL.
+
 ### Debezium Not Capturing Changes
 
 1. Verify PostgreSQL WAL level:
