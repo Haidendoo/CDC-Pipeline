@@ -21,23 +21,36 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   debezium:
     image: quay.io/debezium/server:3.0.0.Final
     container_name: my_debezium_server
     healthcheck:
-      test: curl http://debezium:8080/q/health || exit 1
+      test: curl http://localhost:8080/q/health || exit 1
       interval: 5s
       timeout: 5s
       retries: 5
     ports:
       - "8080:8080"
     volumes:
-      - ./debezium_conf:/debezium/conf  # Debezium server reads config from /debezium/config
+      - ./debezium_conf:/debezium/config
       - ./debezium_data:/debezium/data
     depends_on:
-      - postgres_db
-      - rabbitmq
+      postgres_db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
 
   clickhouse:
     image: clickhouse/clickstack-all-in-one:latest
@@ -52,6 +65,7 @@ services:
       - ./clickhouse_data:/var/lib/clickhouse
       - ./clickhouse_logs:/var/log/clickhouse-server
       - ./clickhouse_users.xml:/etc/clickhouse-server/users.d/default-password.xml
+      - ./clickhouse_init:/docker-entrypoint-initdb.d
       - ./mongodb_data:/data/db
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8123/ping | grep -q Ok."]
@@ -85,3 +99,4 @@ services:
 volumes:
   postgres_data:
   clickhouse_data:
+  rabbitmq_data:

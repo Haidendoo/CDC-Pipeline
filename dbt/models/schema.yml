@@ -8,3 +8,32 @@ models:
         tests:
           - not_null
           - unique
+
+  - name: stg_job_market_cdc
+    description: Parsed Debezium CDC messages consumed from RabbitMQ and landed in ClickHouse.
+    columns:
+      - name: op
+        description: Debezium operation code (c, u, d, r).
+        tests:
+          - not_null
+      - name: ts_ms
+        description: Event timestamp in epoch milliseconds from Debezium payload.
+        tests:
+          - not_null
+      - name: after_job_id
+        description: Primary key value in the after image (null for delete events).
+      - name: before_job_id
+        description: Primary key value in the before image (used for delete events).
+
+  - name: fct_job_market_current
+    description: Latest current-state snapshot by job_id derived from CDC stream with delete handling.
+    columns:
+      - name: job_id
+        tests:
+          - not_null
+          - unique
+      - name: last_event_ts
+        tests:
+          - not_null
+      - name: last_op
+        description: Latest operation per job_id, excludes deleted records.

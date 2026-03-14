@@ -1,0 +1,62 @@
+{
+  "users": [
+    {
+      "name": "guest",
+      "password_hash": "/SLFZCfuV2Qn5syQsqgETP2QxGo6VihCGb9UvamXji7u1YQv",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": "administrator"
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "guest",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "products",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "products_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "products",
+      "vhost": "/",
+      "destination": "products_queue",
+      "destination_type": "queue",
+      "routing_key": "products",
+      "arguments": {}
+    },
+    {
+      "source": "products",
+      "vhost": "/",
+      "destination": "products_queue",
+      "destination_type": "queue",
+      "routing_key": "tutorial.public.job_market",
+      "arguments": {}
+    }
+  ]
+}

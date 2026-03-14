@@ -119,6 +119,12 @@ Custom user configuration in `clickhouse_users.xml`:
 <!-- Add custom user settings here -->
 ```
 
+CDC landing DDL is stored in `clickhouse_init/01_rabbitmq_landing.sql` and creates:
+
+- `rabbitmq_job_market_queue` (RabbitMQ engine consumer)
+- `raw_job_market_cdc` (MergeTree raw landing table)
+- `mv_rabbitmq_job_market_to_raw` (materialized view to persist messages)
+
 ### dbt Configuration
 
 The dbt project is configured in the `dbt/` directory:
@@ -153,6 +159,7 @@ dbt docs serve
   - Password: `guest`
 
 - **ClickHouse Web UI**: http://localhost:8080
+- **ClickHouse Web UI**: http://localhost:8083
 
 - **ClickHouse HTTP Interface**: http://localhost:8123
   - Username: `api`
@@ -173,6 +180,26 @@ Check the RabbitMQ management UI to see CDC events being published.
 docker exec -it my_clickhouse_container clickhouse-client
 ```
 
+### Initialize RabbitMQ -> ClickHouse Landing
+
+Run this once after the stack is up (safe to re-run):
+
+```bash
+bash scripts/init_clickhouse_landing.sh
+```
+
+Verify landing objects exist:
+
+```bash
+docker exec my_clickhouse_container clickhouse-client -q "SHOW TABLES FROM default LIKE '%job_market%';"
+```
+
+Verify CDC messages are arriving:
+
+```bash
+docker exec my_clickhouse_container clickhouse-client -q "SELECT count() AS rows, max(ingested_at) AS last_ingest FROM default.raw_job_market_cdc;"
+```
+
 ### Run dbt Commands Manually
 
 You can run dbt commands manually (outside of the automatic startup):
@@ -190,6 +217,20 @@ docker exec my_dbt_container dbt build
 # Generate and serve docs
 docker exec my_dbt_container dbt docs generate
 docker exec my_dbt_container dbt docs serve --host 0.0.0.0 --port 8080
+```
+
+### Build Current-State Table From CDC
+
+Build the staging and latest-state models:
+
+```bash
+docker exec my_dbt_container dbt run -s stg_job_market_cdc fct_job_market_current
+```
+
+Query current-state rows (latest event per `job_id`, deletes excluded):
+
+```bash
+docker exec my_clickhouse_container clickhouse-client -q "SELECT job_id, job_title, salary, last_event_ts FROM default.fct_job_market_current ORDER BY job_id DESC LIMIT 20;"
 ```
 
 ### Create Test Data
@@ -316,6 +357,12 @@ If you need Debezium UI, you must run a Kafka Connect-based deployment (Kafka + 
 2. Verify ClickHouse logs:
    ```bash
    docker logs my_clickhouse_container
+   ```
+
+3. Ensure RabbitMQ landing objects exist:
+   ```bash
+   bash scripts/init_clickhouse_landing.sh
+   docker exec my_clickhouse_container clickhouse-client -q "SHOW TABLES FROM default LIKE '%job_market%';"
    ```
 
 ### dbt Container Keeps Restarting
