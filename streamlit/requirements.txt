@@ -1,0 +1,6 @@
+streamlit==1.44.1
+clickhouse-connect==0.8.17
+pandas==2.2.3
+openai==1.68.2
+google-genai>=1.0.0
+google-genai==1.7.0

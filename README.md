@@ -75,12 +75,13 @@ For detailed architecture documentation including component descriptions, data f
    docker-compose ps
    ```
 
-   You should see 5 containers running:
+   You should see 6 containers running:
    - `my_postgres_container`
    - `my_rabbitmq_container`
    - `my_debezium_server`
    - `my_clickhouse_container`
    - `my_dbt_container` (runs dbt transformations and serves docs UI)
+   - `my_streamlit_agent` (realtime monitoring dashboard + AI SQL agent)
 
 ## ⚙️ Configuration
 
@@ -164,6 +165,56 @@ dbt docs serve
 - **ClickHouse HTTP Interface**: http://localhost:8123
   - Username: `api`
   - Password: `api`
+
+- **Streamlit Control Room**: http://localhost:8501
+   - Monitoring tab: realtime pipeline health and throughput
+   - AI Agent tab: ask natural language questions, auto-generate read-only SQL
+
+### Optional: Enable AI Agent (Ollama, OpenAI, or Gemini)
+
+**Priority order:** Ollama (local) > OpenAI > Gemini
+
+#### Option A: Local Ollama (recommended for offline use)
+
+If you have Ollama running locally:
+
+```bash
+# Start Ollama container (if not already running)
+docker start ollama
+
+# Pull a model if needed
+docker exec ollama ollama pull llama3.2:1b
+
+# Set Streamlit to use local Ollama
+export OLLAMA_MODEL=llama3.2:1b
+export OLLAMA_BASE_URL=http://localhost:11434/v1
+docker compose up -d --build streamlit
+```
+
+Ollama endpoint should be reachable from Streamlit at `http://localhost:11434/v1` (via Docker's host network).
+
+#### Option B: OpenAI
+
+```bash
+export OPENAI_API_KEY=<your_openai_key>
+export OPENAI_MODEL=gpt-4.1-mini
+docker compose up -d --build streamlit
+```
+
+#### Option C: Gemini
+
+```bash
+export GEMINI_API_KEY=<your_gemini_key>
+export GEMINI_MODEL=gemini-2.0-flash
+docker compose up -d --build streamlit
+```
+
+If no provider is configured, the monitoring dashboard still works; only the AI tab shows an error.
+
+Provider model variables are independent:
+
+- `OPENAI_MODEL` is only used when `OPENAI_API_KEY` is set.
+- `GEMINI_MODEL` is only used when `GEMINI_API_KEY` is set.
 ### Connect to PostgreSQL
 
 ```bash
@@ -284,6 +335,24 @@ These changes will be automatically captured by Debezium and sent to RabbitMQ.
 ```
 
 ## 📊 Monitoring
+
+### Streamlit Monitoring Dashboard
+
+Open http://localhost:8501 and use the Monitoring tab for:
+
+- Raw/staging/current row-count snapshots
+- Ingest lag (`now() - max(ingested_at)`) in seconds
+- Events-per-minute trend for last 60 minutes
+- Operation mix (`c`, `u`, `d`, `r`) in last 60 minutes
+- Latest rows in `fct_job_market_current`
+
+### Run Monitoring SQL Directly
+
+Use prepared queries from `scripts/monitoring_queries.sql`:
+
+```bash
+cat scripts/monitoring_queries.sql | docker exec -i my_clickhouse_container clickhouse-client --multiquery
+```
 
 ### Check Debezium Logs
 
