@@ -63,6 +63,21 @@ For detailed architecture documentation including component descriptions, data f
    cd CDC-Pipeline
    ```
 
+## 🛡️ Resetting Debezium CDC After Database/Table Recreation
+
+If you recreate your PostgreSQL database or tables (for example, after running build scripts or restoring from backup), you must reset Debezium's replication slot and publication to ensure CDC continues to work. Use the provided script:
+
+```bash
+bash scripts/reset_debezium_cdc.sh
+```
+
+This script will:
+- Stop the Debezium container
+- Drop and recreate the replication slot and publication in PostgreSQL
+- Start the Debezium container again
+
+Run this script any time you rebuild or reset your source database to avoid CDC pipeline issues.
+
 2. **Start all services**
 
    ```bash
@@ -485,6 +500,12 @@ docker-compose down -v
 rm -rf clickhouse_data/* clickhouse_logs/* mongodb_data/*
 ```
 
+### Reset Debezium CDC (After DB/Table Recreation)
+
+```bash
+bash scripts/reset_debezium_cdc.sh
+```
+
 ### View Service Logs
 
 ```bash
@@ -509,13 +530,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
-## 📞 Support
-
-If you encounter any issues or have questions:
-
-1. Check the [Troubleshooting](#troubleshooting) section
-2. Review Docker container logs
-3. Open an issue in the repository
 
 ## 🔗 Resources
 
