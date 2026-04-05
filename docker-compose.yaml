@@ -91,8 +91,8 @@ services:
     command: >
       sh -c "dbt deps
       && dbt debug
-      && dbt build
-      && dbt docs generate
+      && dbt run
+      && dbt parse
       && dbt docs serve --host 0.0.0.0 --port 8080"
     restart: unless-stopped
 

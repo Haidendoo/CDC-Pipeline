@@ -14,6 +14,11 @@ Dataset source: [Kaggle - AI and Data Science Job Market Dataset](https://www.ka
 ### RabbitMQ (Message Broker)
 ![RabbitMQ](img/Rabbitmq.png)
 
+
+### dbt (Data Lineage)
+![dbt](img/dbt.png)
+
+
 ### Streamlit Dashboard + AI Agent
 ![Streamlit](img/streamlit.png)
 
@@ -111,6 +116,36 @@ docker exec my_clickhouse_container clickhouse-client -q "SHOW TABLES FROM defau
 docker exec my_clickhouse_container clickhouse-client -q "SELECT count() AS rows, max(ingested_at) AS last_ingest FROM default.raw_job_market_cdc;"
 ```
 
+## Test Real-Time Updates (Add/Delete in Source Table)
+
+Add or delete rows in the PostgreSQL source table to see changes flow through the pipeline in near real time.
+
+```bash
+# Open PostgreSQL shell
+docker exec -it my_postgres_container psql -U myuser -d mydatabase
+```
+
+```sql
+-- Add one row (INSERT)
+INSERT INTO job_market (
+	job_title, company, location, salary
+) VALUES (
+	'Data Engineer', 'Ampere Labs', 'Remote', 120000
+);
+
+-- Delete one row (DELETE)
+DELETE FROM job_market
+WHERE job_title = 'Data Engineer' AND company = 'Ampere Labs';
+```
+
+Then check incoming CDC events:
+
+```bash
+docker exec my_clickhouse_container clickhouse-client -q "SELECT op, count() FROM default.raw_job_market_cdc GROUP BY op ORDER BY op;"
+
+```
+
+Or navigating to http://localhost:8501/ to see the new data coming
 ## Common Commands
 
 ### Stop stack
