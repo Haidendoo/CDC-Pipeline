@@ -1,214 +1,80 @@
 # CDC-Pipeline
 
-A real-time Change Data Capture (CDC) pipeline that captures database changes using Debezium, streams events through RabbitMQ, and stores them in ClickHouse for analytics.
+Simple real-time CDC pipeline:
+PostgreSQL -> Debezium -> RabbitMQ -> ClickHouse -> dbt -> Streamlit AI dashboard.
 
-The data you can get from here [Kaggle](https://www.kaggle.com/datasets/shree0910/ai-and-data-science-job-market-dataset-20202026)
-## 📋 Table of Contents
+Dataset source: [Kaggle - AI and Data Science Job Market Dataset](https://www.kaggle.com/datasets/shree0910/ai-and-data-science-job-market-dataset-20202026)
 
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Data Flow](#data-flow)
-- [Monitoring](#monitoring)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
-
-## 🔍 Overview
-
-This CDC pipeline uses Debezium to capture real-time database changes, streaming them as JSON events through RabbitMQ. These raw logs are then ingested into a warehouse where dbt transforms the "before/after" snapshots into clean, structured tables. dbt automatically runs on startup to transform and test your models. This ensures low-latency data sync and a decoupled analytical architecture.
-
-### Key Components
-
-- **PostgreSQL**: Source database with logical replication enabled
-- **Debezium Server**: CDC engine that monitors database changes
-- **RabbitMQ**: Message broker for event streaming
-- **ClickHouse**: Analytics warehouse for storing and querying CDC events
-- **dbt**: Transform engine that builds and tests data models on ClickHouse with interactive docs UI
-
-## 🏗️ Architecture
+## Architecture
 
 ![CDC Pipeline Architecture](img/architect.png)
 
-For detailed architecture documentation including component descriptions, data flow steps, and design patterns, see [ARCHITECTURE.md](ARCHITECTURE.md).
+## Components
 
-## ✨ Features
+### RabbitMQ (Message Broker)
+![RabbitMQ](img/Rabbitmq.png)
 
-- **Real-time CDC**: Captures INSERT, UPDATE, and DELETE operations
-- **Logical Replication**: Uses PostgreSQL's Write-Ahead Log (WAL)
-- **Decoupled Architecture**: Message broker enables multiple consumers
-- **Automatic Transformations**: dbt runs on startup to build and test models
-- **Data Documentation**: Interactive dbt docs UI with lineage and column-level metadata
-- **Scalable**: Easy to add more sources or sinks
-- **Event Streaming**: JSON-formatted change events
-- **Low Latency**: Near real-time data synchronization
+### Streamlit Dashboard + AI Agent
+![Streamlit](img/streamlit.png)
 
-## 📦 Prerequisites
+### Ollama (Local LLM) Text2SQL
+![Ollama](img/ollama.png)
 
-- Docker (20.10+)
-- Docker Compose (2.0+)
-- 4GB+ RAM available for containers
-- Basic understanding of CDC concepts
+## How To Run (Quick Start)
 
-## 🚀 Installation
-
-1. **Clone the repository**
-
-   ```bash
-   git clone <repository-url>
-   cd CDC-Pipeline
-   ```
-
-## 🛡️ Resetting Debezium CDC After Database/Table Recreation
-
-If you recreate your PostgreSQL database or tables (for example, after running build scripts or restoring from backup), you must reset Debezium's replication slot and publication to ensure CDC continues to work. Use the provided script:
+### 1) Start all services
 
 ```bash
-bash scripts/reset_debezium_cdc.sh
+cd CDC-Pipeline
+docker compose up -d --build
 ```
 
-This script will:
-- Stop the Debezium container
-- Drop and recreate the replication slot and publication in PostgreSQL
-- Start the Debezium container again
-
-Run this script any time you rebuild or reset your source database to avoid CDC pipeline issues.
-
-2. **Start all services**
-
-   ```bash
-   docker-compose up -d
-   ```
-
-3. **Verify all containers are running**
-
-   ```bash
-   docker-compose ps
-   ```
-
-   You should see 6 containers running:
-   - `my_postgres_container`
-   - `my_rabbitmq_container`
-   - `my_debezium_server`
-   - `my_clickhouse_container`
-   - `my_dbt_container` (runs dbt transformations and serves docs UI)
-   - `my_streamlit_agent` (realtime monitoring dashboard + AI SQL agent)
-
-## ⚙️ Configuration
-
-### PostgreSQL Configuration
-
-The PostgreSQL instance is configured with logical replication:
-
-```yaml
-command: ["postgres", "-c", "wal_level=logical"]
-```
-
-### Debezium Configuration
-
-Edit `debezium_conf/application.properties` to customize:
-
-```properties
-# Sink configuration
-debezium.sink.type=rabbitmq
-debezium.sink.rabbitmq.connection.host=rabbitmq
-
-# Source configuration
-debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector
-debezium.source.database.hostname=postgres_db
-debezium.source.database.port=5432
-debezium.source.database.user=myuser
-debezium.source.database.password=mypassword
-debezium.source.database.dbname=mydatabase
-debezium.source.topic.prefix=cdc_event
-```
-
-### ClickHouse Configuration
-
-Custom user configuration in `clickhouse_users.xml`:
-
-```xml
-<!-- Add custom user settings here -->
-```
-
-CDC landing DDL is stored in `clickhouse_init/01_rabbitmq_landing.sql` and creates:
-
-- `rabbitmq_job_market_queue` (RabbitMQ engine consumer)
-- `raw_job_market_cdc` (MergeTree raw landing table)
-- `mv_rabbitmq_job_market_to_raw` (materialized view to persist messages)
-
-### dbt Configuration
-
-The dbt project is configured in the `dbt/` directory:
-
-- **dbt_project.yml**: Project configuration (name, version, model paths, etc.)
-- **profiles.yml**: ClickHouse connection settings
-  - Host: `clickhouse` (Docker network)
-  - Port: `8123`
-  - Schema: `default`
-  - User: `api` / Password: `api`
-
-dbt **automatically runs on startup** with the following command sequence:
-```bash
-dbt deps
-dbt debug
-dbt build           # runs models and tests
-dbt docs generate
-dbt docs serve
-```
-
-## 📚 Usage
-
-### Access Service UIs
-
-- **dbt Docs & Lineage**: http://localhost:8081
-  - Auto-generated documentation of models and tests
-  - View model lineage and column descriptions
-  - No authentication required
-
-- **RabbitMQ Management**: http://localhost:15672
-  - Username: `guest`
-  - Password: `guest`
-
-- **ClickHouse Web UI**: http://localhost:8080
-- **ClickHouse Web UI**: http://localhost:8083
-
-- **ClickHouse HTTP Interface**: http://localhost:8123
-  - Username: `api`
-  - Password: `api`
-
-- **Streamlit Control Room**: http://localhost:8501
-   - Monitoring tab: realtime pipeline health and throughput
-   - AI Agent tab: ask natural language questions, auto-generate read-only SQL
-
-### Optional: Enable AI Agent (Ollama, OpenAI, or Gemini)
-
-**Priority order:** Ollama (local) > OpenAI > Gemini
-
-#### Option A: Local Ollama (recommended for offline use)
-
-If you have Ollama running locally:
+### 2) Check containers
 
 ```bash
-# Start Ollama container (if not already running)
-docker start ollama
+docker compose ps
+```
 
-# Pull a model if needed
-docker exec ollama ollama pull llama3.2:1b
+Expected containers:
+- `my_postgres_container`
+- `my_rabbitmq_container`
+- `my_debezium_server`
+- `my_clickhouse_container`
+- `my_dbt_container`
+- `my_streamlit_agent`
+- `my_ollama_container`
 
-# Set Streamlit to use local Ollama
+### 3) Open the UIs
+
+- Streamlit: http://localhost:8501
+- RabbitMQ: http://localhost:15672 (guest / guest)
+- ClickHouse Web UI: http://localhost:8083
+- dbt Docs UI: http://localhost:8081
+
+## AI Agent Setup (Optional)
+
+Priority: Ollama local -> OpenAI -> Gemini
+
+### Option A: Ollama (recommended)
+
+Use internal Docker URL (default in compose):
+
+```bash
+# Make sure Ollama service is running
+docker compose up -d ollama
+
+# Pull model inside container
+docker exec my_ollama_container ollama pull llama3.2:1b
+
+# Optional override (already default in docker-compose.yaml)
 export OLLAMA_MODEL=llama3.2:1b
-export OLLAMA_BASE_URL=http://localhost:11434/v1
+export OLLAMA_BASE_URL=http://ollama:11434/v1
+
+# Restart streamlit to pick env changes
 docker compose up -d --build streamlit
 ```
 
-Ollama endpoint should be reachable from Streamlit at `http://localhost:11434/v1` (via Docker's host network).
-
-#### Option B: OpenAI
+### Option B: OpenAI
 
 ```bash
 export OPENAI_API_KEY=<your_openai_key>
@@ -216,7 +82,7 @@ export OPENAI_MODEL=gpt-4.1-mini
 docker compose up -d --build streamlit
 ```
 
-#### Option C: Gemini
+### Option C: Gemini
 
 ```bash
 export GEMINI_API_KEY=<your_gemini_key>
@@ -224,320 +90,49 @@ export GEMINI_MODEL=gemini-2.0-flash
 docker compose up -d --build streamlit
 ```
 
-If no provider is configured, the monitoring dashboard still works; only the AI tab shows an error.
+## Basic Verify Commands
 
-Provider model variables are independent:
-
-- `OPENAI_MODEL` is only used when `OPENAI_API_KEY` is set.
-- `GEMINI_MODEL` is only used when `GEMINI_API_KEY` is set.
-### Connect to PostgreSQL
+### Check Debezium health
 
 ```bash
-docker exec -it my_postgres_container psql -U myuser -d mydatabase
+docker logs my_debezium_server --tail 100
 ```
 
-### Monitor RabbitMQ Queues
-
-Check the RabbitMQ management UI to see CDC events being published.
-
-### Query ClickHouse
-
-```bash
-docker exec -it my_clickhouse_container clickhouse-client
-```
-
-### Initialize RabbitMQ -> ClickHouse Landing
-
-Run this once after the stack is up (safe to re-run):
+### Check landing table in ClickHouse
 
 ```bash
 bash scripts/init_clickhouse_landing.sh
-```
-
-Verify landing objects exist:
-
-```bash
 docker exec my_clickhouse_container clickhouse-client -q "SHOW TABLES FROM default LIKE '%job_market%';"
 ```
 
-Verify CDC messages are arriving:
+### Check CDC rows arriving
 
 ```bash
 docker exec my_clickhouse_container clickhouse-client -q "SELECT count() AS rows, max(ingested_at) AS last_ingest FROM default.raw_job_market_cdc;"
 ```
 
-### Run dbt Commands Manually
+## Common Commands
 
-You can run dbt commands manually (outside of the automatic startup):
-
-```bash
-# Run models
-docker exec my_dbt_container dbt run
-
-# Run tests
-docker exec my_dbt_container dbt test
-
-# Build (run models + tests)
-docker exec my_dbt_container dbt build
-
-# Generate and serve docs
-docker exec my_dbt_container dbt docs generate
-docker exec my_dbt_container dbt docs serve --host 0.0.0.0 --port 8080
-```
-
-### Build Current-State Table From CDC
-
-Build the staging and latest-state models:
+### Stop stack
 
 ```bash
-docker exec my_dbt_container dbt run -s stg_job_market_cdc fct_job_market_current
+docker compose down
 ```
 
-Query current-state rows (latest event per `job_id`, deletes excluded):
+### Clean reset (delete volumes)
 
 ```bash
-docker exec my_clickhouse_container clickhouse-client -q "SELECT job_id, job_title, salary, last_event_ts FROM default.fct_job_market_current ORDER BY job_id DESC LIMIT 20;"
+docker compose down -v
 ```
 
-### Create Test Data
-
-Create a table in PostgreSQL and insert data:
-
-```sql
--- Connect to PostgreSQL
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100),
-    email VARCHAR(100),
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Insert test data
-INSERT INTO users (name, email) VALUES 
-    ('John Doe', 'john@example.com'),
-    ('Jane Smith', 'jane@example.com');
-
--- Update a record
-UPDATE users SET email = 'john.doe@example.com' WHERE id = 1;
-
--- Delete a record
-DELETE FROM users WHERE id = 2;
-```
-
-These changes will be automatically captured by Debezium and sent to RabbitMQ.
-
-## 🔄 Data Flow
-
-1. **Change Occurs**: Application modifies data in PostgreSQL
-2. **WAL Capture**: PostgreSQL writes to Write-Ahead Log
-3. **Debezium Reads**: Debezium streams WAL changes
-4. **Event Creation**: Changes are converted to JSON events with before/after snapshots
-5. **Message Publishing**: Events are published to RabbitMQ
-6. **Event Consumption**: Consumers read from RabbitMQ queues
-7. **Data Loading**: Events are loaded into ClickHouse
-8. **Transformation**: dbt automatically transforms raw events into structured tables
-9. **Documentation**: dbt serves interactive docs UI with model lineage and descriptions
-
-### Event Format
-
-```json
-{
-  "before": { "id": 1, "name": "John", "email": "john@example.com" },
-  "after": { "id": 1, "name": "John", "email": "john.doe@example.com" },
-  "op": "u",
-  "ts_ms": 1678464000000
-}
-```
-
-## 📊 Monitoring
-
-### Streamlit Monitoring Dashboard
-
-Open http://localhost:8501 and use the Monitoring tab for:
-
-- Raw/staging/current row-count snapshots
-- Ingest lag (`now() - max(ingested_at)`) in seconds
-- Events-per-minute trend for last 60 minutes
-- Operation mix (`c`, `u`, `d`, `r`) in last 60 minutes
-- Latest rows in `fct_job_market_current`
-
-### Run Monitoring SQL Directly
-
-Use prepared queries from `scripts/monitoring_queries.sql`:
-
-```bash
-cat scripts/monitoring_queries.sql | docker exec -i my_clickhouse_container clickhouse-client --multiquery
-```
-
-### Check Debezium Logs
-
-```bash
-docker logs -f my_debezium_server
-```
-
-### Check Service Health
-
-```bash
-# PostgreSQL
-docker exec my_postgres_container pg_isready
-
-# RabbitMQ
-curl -u guest:guest http://localhost:15672/api/healthchecks/node
-
-# ClickHouse
-curl http://localhost:8123/ping
-```
-
-### View Container Stats
-
-```bash
-docker stats
-```
-
-## 🔧 Troubleshooting
-
-### Debezium UI Shows "Could not connect to Kafka Connect"
-
-This project uses **Debezium Server** (`quay.io/debezium/server`) with RabbitMQ sink, not Kafka Connect.
-
-- Debezium UI (`debezium/debezium-ui`) requires a **Kafka Connect REST API** endpoint (for example `/connectors` on port `8083`).
-- Debezium Server does not expose Kafka Connect APIs, so Debezium UI cannot manage or display this pipeline.
-
-If you need Debezium UI, you must run a Kafka Connect-based deployment (Kafka + Connect + Debezium connector) and point the UI to that Connect URL.
-
-### Debezium Not Capturing Changes
-
-1. Verify PostgreSQL WAL level:
-   ```sql
-   SHOW wal_level;  -- Should return 'logical'
-   ```
-
-2. Check Debezium logs for errors:
-   ```bash
-   docker logs my_debezium_server
-   ```
-
-3. Ensure the table has a PRIMARY KEY (required for CDC)
-
-### RabbitMQ Connection Issues
-
-1. Verify RabbitMQ is running:
-   ```bash
-   docker ps | grep rabbitmq
-   ```
-
-2. Check network connectivity:
-   ```bash
-   docker exec my_debezium_server ping rabbitmq
-   ```
-
-### ClickHouse Data Not Loading
-
-1. Check data volume permissions:
-   ```bash
-   ls -la clickhouse_data/
-   ```
-
-2. Verify ClickHouse logs:
-   ```bash
-   docker logs my_clickhouse_container
-   ```
-
-3. Ensure RabbitMQ landing objects exist:
-   ```bash
-   bash scripts/init_clickhouse_landing.sh
-   docker exec my_clickhouse_container clickhouse-client -q "SHOW TABLES FROM default LIKE '%job_market%';"
-   ```
-
-### dbt Container Keeps Restarting
-
-1. Check dbt logs to identify the error:
-   ```bash
-   docker logs my_dbt_container
-   ```
-
-2. Common issues:
-   - **git not found**: Rebuild the dbt image with `docker compose up -d --build dbt`
-   - **Connection timeout**: Ensure ClickHouse is healthy: `docker ps | grep clickhouse`
-   - **Profile errors**: Verify `dbt/profiles.yml` has correct ClickHouse credentials
-
-### Containers Won't Start
-
-```bash
-# Remove existing containers and volumes
-docker-compose down -v
-
-# Restart services
-docker-compose up -d
-```
-
-### dbt Models or Tests Failing
-
-1. Check the dbt logs:
-   ```bash
-   docker logs my_dbt_container
-   ```
-
-2. Run dbt debug to verify connection:
-   ```bash
-   docker exec my_dbt_container dbt debug
-   ```
-
-3. Verify your SQL models are syntactically correct for ClickHouse (not all PostgreSQL syntax is supported)
-
-## 🛠️ Development
-
-### Stop All Services
-
-```bash
-docker-compose down
-```
-
-### Remove All Data (Clean Start)
-
-```bash
-docker-compose down -v
-rm -rf clickhouse_data/* clickhouse_logs/* mongodb_data/*
-```
-
-### Reset Debezium CDC (After DB/Table Recreation)
+### Reset Debezium CDC metadata (after recreating DB/table)
 
 ```bash
 bash scripts/reset_debezium_cdc.sh
 ```
 
-### View Service Logs
+## Notes
 
-```bash
-# All services
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f debezium
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
-
-## 🔗 Resources
-
-- [Debezium Documentation](https://debezium.io/documentation/)
-- [PostgreSQL Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)
-- [RabbitMQ Tutorials](https://www.rabbitmq.com/getstarted.html)
-- [ClickHouse Documentation](https://clickhouse.com/docs)
-
----
-
-**Note**: This is a development setup. For production use, ensure proper security configurations, authentication, and network isolation.
+- This setup is for development.
+- If AI provider is not configured, monitoring still works; only AI tab fails.
+- For deep architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
